@@ -3,14 +3,37 @@ name: Tire Price Scraper
 on:
   workflow_dispatch:
   schedule:
-    # Daily at 10:00 UTC
-    - cron: "0 10 * * *"
+    # Weekdays at 10:00 UTC
+    - cron: "0 10 * * 1-5"
 
 permissions:
   contents: read
 
 jobs:
+  check-schedule:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.schedule-check.outputs.should_run }}
+
+    steps:
+      - name: Check whether this account should run
+        id: schedule-check
+        shell: bash
+        run: |
+          DAY_OF_MONTH=$(date -u +%-d)
+
+          # Manual runs should always proceed
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          elif (( DAY_OF_MONTH >= 15 && DAY_OF_MONTH <= 28 )); then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
   scrape:
+    needs: check-schedule
+    if: needs.check-schedule.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
