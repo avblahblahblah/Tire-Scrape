@@ -207,12 +207,10 @@ def main():
     )
     final_df = final_df[
         [
-            "website",
             "model",
             "size",
             "price_per_tire",
-            "in_stock",
-            "url",
+            "website",
             "RAW SIZE",
             "DATE",
             "MAP",
