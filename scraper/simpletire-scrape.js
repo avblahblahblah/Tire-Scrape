@@ -209,7 +209,8 @@ function normalizeRows(sizes, pageUrl, productGroup, siteProduct) {
 
   return sizes.map((item) => {
     const specs = specMap(item.specList);
-    const mpn = item.partNumber || item.siteQueryParams?.mpn || null;
+    // SimpleTire labels this value "Part Number" in the product details.
+    const partNumber = item.partNumber || item.siteQueryParams?.mpn || null;
 
     return {
       sourceUrl: pageUrl,
@@ -218,7 +219,9 @@ function normalizeRows(sizes, pageUrl, productGroup, siteProduct) {
       size: item.size || null,
       loadSpeedRating: item.loadSpeedRating || null,
       loadRange: item.loadRange || null,
-      mpn,
+      part_number: partNumber,
+      // Keep the old name so existing consumers do not break.
+      mpn: partNumber,
       itemId: item.siteQueryParams?.itemId || null,
       price: centsToPrice(item.priceInCents),
       priceInCents: item.priceInCents === undefined ? null : Number(item.priceInCents),
@@ -246,6 +249,7 @@ function toCsv(rows) {
     "size",
     "loadSpeedRating",
     "loadRange",
+    "part_number",
     "mpn",
     "itemId",
     "price",
