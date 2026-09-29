@@ -78,6 +78,16 @@ def normalize_model(value):
     return replacements.get(key, text)
 
 
+def first_available(df, columns):
+    """Coalesce compatible columns while accepting older scraper files."""
+    result = pd.Series(pd.NA, index=df.index, dtype="object")
+    for column in columns:
+        if column in df.columns:
+            values = df[column].replace(r"^\s*$", pd.NA, regex=True)
+            result = result.fillna(values)
+    return result
+
+
 def raw_size_from_size(size, website=None):
     if pd.isna(size):
         return None
@@ -155,8 +165,13 @@ def standardize_existing_giga_priority(df):
     df["model"] = df["model"].apply(normalize_model)
     df["price_per_tire"] = df["price_per_tire"].apply(clean_money)
     df["in_stock"] = df["in_stock"].apply(normalize_bool)
+    df["part_number"] = first_available(df, ["part_number", "sku"])
+    df["url"] = first_available(df, ["url", "sourceUrl"])
     df = df[df["in_stock"]]
-    return df[["website", "model", "size", "price_per_tire", "in_stock", "url"]]
+    return df[[
+        "website", "model", "size", "price_per_tire", "in_stock",
+        "part_number", "url",
+    ]]
 
 
 def standardize_simpletire(df):
@@ -165,8 +180,13 @@ def standardize_simpletire(df):
     df["model"] = df["productName"].apply(normalize_model)
     df["price_per_tire"] = df["price"].apply(clean_money)
     df["in_stock"] = df["price_per_tire"].notna()
+    df["part_number"] = first_available(df, ["part_number", "mpn", "partNumber"])
+    df["url"] = first_available(df, ["url", "sourceUrl"])
     df = df[df["in_stock"]]
-    return df[["website", "model", "size", "price_per_tire", "in_stock", "url"]]
+    return df[[
+        "website", "model", "size", "price_per_tire", "in_stock",
+        "part_number", "url",
+    ]]
 
 
 def main():
@@ -211,6 +231,8 @@ def main():
             "size",
             "price_per_tire",
             "website",
+            "part_number",
+            "url",
             "RAW SIZE",
             "DATE",
             "MAP",
