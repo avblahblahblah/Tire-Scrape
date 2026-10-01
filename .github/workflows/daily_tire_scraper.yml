@@ -25,7 +25,7 @@ jobs:
           # Manual runs should always proceed
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-          elif (( DAY_OF_MONTH >= 15)); then
+          elif (( DAY_OF_MONTH <= 15)); then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
