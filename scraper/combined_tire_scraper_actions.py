@@ -200,15 +200,16 @@ def giga_empty(
 
 async def giga_load_seed(page, url):
     """
-    Load a model seed page.
+    Load a model seed page and open the tire-size dropdown.
 
-    IMPORTANT:
-    We do NOT wait for a price here.
-
-    The seed SKU itself may be unavailable while the model still has dozens
-    of valid size variants in the dropdown.
+    Giga does not reliably attach the size links until the
+    Tire size button is clicked.
     """
-    for attempt in range(1, GIGA_MAX_RETRY + 1):
+
+    for attempt in range(
+        1,
+        GIGA_MAX_RETRY + 1,
+    ):
         try:
             await page.goto(
                 url,
@@ -216,31 +217,61 @@ async def giga_load_seed(page, url):
                 timeout=GIGA_PAGE_TIMEOUT,
             )
 
-            # Wait for the size dropdown instead of waiting for a price.
+            size_button = (
+                page
+                .locator("button")
+                .filter(has_text="Tire size")
+                .first
+            )
+
+            await size_button.wait_for(
+                state="visible",
+                timeout=15_000,
+            )
+
+            await size_button.click()
+
             await page.wait_for_selector(
-                "ul.j-dropdown-list li.j-dropdown-item",
+                "li.j-dropdown-item a[href]",
                 state="attached",
                 timeout=15_000,
             )
 
             return True, ""
 
-        except PlaywrightTimeout as e:
+        except PlaywrightTimeout as error:
             if attempt < GIGA_MAX_RETRY:
                 print(
                     f"  [seed retry {attempt}]",
                     end="",
                     flush=True,
                 )
+
                 await asyncio.sleep(2)
+
             else:
                 return (
                     False,
-                    f"Seed timeout after {GIGA_MAX_RETRY} attempts: {e}",
+                    "Seed timeout after "
+                    f"{GIGA_MAX_RETRY} attempts: "
+                    f"{error}",
                 )
 
-        except Exception as e:
-            return False, f"Seed page load error: {e}"
+        except Exception as error:
+            if attempt < GIGA_MAX_RETRY:
+                print(
+                    f"  [seed retry {attempt}]",
+                    end="",
+                    flush=True,
+                )
+
+                await asyncio.sleep(2)
+
+            else:
+                return (
+                    False,
+                    f"Seed page load error: {error}",
+                )
 
 
 async def giga_load_product(page, url):
@@ -308,7 +339,7 @@ async def giga_get_size_links(
 
                 document
                     .querySelectorAll(
-                        'ul.j-dropdown-list li.j-dropdown-item'
+                        'li.j-dropdown-item'
                     )
                     .forEach(li => {
                         const a = li.querySelector('a[href]');
