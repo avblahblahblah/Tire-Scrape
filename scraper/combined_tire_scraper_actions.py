@@ -216,9 +216,11 @@ async def giga_load_seed(page, url):
                 timeout=GIGA_PAGE_TIMEOUT,
             )
 
-            # Wait for the size dropdown instead of waiting for a price.
+            # Giga keeps its size selector hidden until the user opens it.
+            # Wait for a variant link to exist in the DOM; do not require
+            # the surrounding button or dropdown to be visible.
             await page.wait_for_selector(
-                "ul.j-dropdown-list li.j-dropdown-item",
+                "a[href*='/tirecode/']",
                 state="attached",
                 timeout=15_000,
             )
@@ -302,51 +304,85 @@ async def giga_get_size_links(
 
     try:
         links = await page.evaluate(
-            """() => {
+            r"""(seedUrl) => {
                 const seen = new Set();
                 const out = [];
 
+                const seed = new URL(seedUrl, window.location.origin);
+                const seedParts = seed.pathname.split('/').filter(Boolean);
+                const seedTirecodeIndex = seedParts.indexOf('tirecode');
+                const seedModelPath = seedTirecodeIndex > 0
+                    ? seedParts.slice(1, seedTirecodeIndex).join('/')
+                    : null;
+
                 document
                     .querySelectorAll(
-                        'ul.j-dropdown-list li.j-dropdown-item'
+                        "a[href*='/tirecode/']"
                     )
-                    .forEach(li => {
-                        const a = li.querySelector('a[href]');
+                    .forEach(a => {
+                        const href = a.getAttribute('href');
 
-                        if (!a) {
+                        let target;
+                        try {
+                            target = new URL(href, window.location.origin);
+                        } catch (_) {
                             return;
                         }
 
-                        const href = a.getAttribute('href');
+                        const parts = target.pathname
+                            .split('/')
+                            .filter(Boolean);
+                        const tirecodeIndex = parts.indexOf('tirecode');
+                        const modelPath = tirecodeIndex > 0
+                            ? parts.slice(1, tirecodeIndex).join('/')
+                            : null;
+
+                        // Product pages can contain recommendations for other
+                        // models. Keep only variants belonging to this seed.
+                        if (!seedModelPath || modelPath !== seedModelPath) {
+                            return;
+                        }
+
+                        const rawText = (a.innerText || a.textContent || '')
+                            .trim();
+                        const sizeMatch = rawText.match(
+                            /\b\d{3}\s*\/\s*\d{2}\s*R\s*\d{2}\b/i
+                        );
 
                         if (
                             !href ||
                             href.startsWith('javascript') ||
-                            seen.has(href)
+                            !sizeMatch ||
+                            seen.has(target.href)
                         ) {
                             return;
                         }
 
-                        seen.add(href);
+                        seen.add(target.href);
+
+                        const item = a.closest('li');
+                        const itemText = item
+                            ? item.innerText
+                            : rawText;
 
                         out.push({
-                            size: a.innerText
-                                .trim()
-                                .replace('- Out of Stock', '')
-                                .trim(),
+                            size: sizeMatch[0]
+                                .replace(/\s+/g, ''),
 
-                            href: href,
+                            href: target.href,
 
-                            // Giga already tells us this in the dropdown.
+                            // Giga marks OOS variants by class and/or text.
                             in_stock:
-                                !li.classList.contains(
-                                    'not-orderable'
+                                !(
+                                    item?.classList.contains('not-orderable')
+                                    || /out of stock/i.test(itemText)
                                 ),
                         });
                     });
 
                 return out;
-            }"""
+            }""",
+            seed_url,
         )
 
     except Exception as e:
